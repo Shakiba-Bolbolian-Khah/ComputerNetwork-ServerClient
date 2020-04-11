@@ -7,22 +7,23 @@ class Client:
         self.talk()
         
     def talk(self):
+        self.dataS.bind(("", 0))
+        self.dataS.listen(1)
         self.s.connect(("", 8300))
-        self.dataS.bind(("", 8200))
-        print(self.dataS.getsockname()[1])
+        port = self.dataS.getsockname()[1]
         while(True):
-            cmd = raw_input()
-            print(cmd)
+            cmd = input()
+            print(cmd.encode())
             if(cmd == "LIST"):
-                cmd += " 8200"
-            self.s.send(cmd)
-            if(cmd == "LIST 8200"):
-                self.dataS.listen(2)
+                cmd += " " + str(port)
+            self.s.send(cmd.encode())
+            if(cmd == "LIST " + str(port)):
                 c,a = self.dataS.accept()
-                listData = self.dataS.recv(100000)
-                print(listData)
+                listData = c.recv(100000)
+                print(listData.decode())
+                c.close()
             data = self.s.recv(100000)
-            print(data)    
+            print(data.decode())    
         self.s.close()
 
 

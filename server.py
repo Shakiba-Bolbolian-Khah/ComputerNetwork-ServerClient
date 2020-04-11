@@ -61,14 +61,13 @@ class DownloadManager:
 
     def uploadList(self, data, portNum, user):
         if True:
-            print(portNum)
             self.s = socket(AF_INET, SOCK_STREAM)
             self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
             self.s.bind(("", self.dataPort))
             self.s.connect(('127.0.0.1',portNum))
-            self.s.sendall(data)
+            sendBytes = self.s.send(data)
             self.s.close()
-            user.updateRemainedSize(len(data))
+            # user.updateRemainedSize(len(data))
             return True
         else:
             return False
@@ -159,8 +158,9 @@ class Server:
             files = [f for f in os.listdir('.') if os.path.isfile(f)]
             for f in files:
                 fileList += f + "\n"
-                self.dm.uploadList(fileList.rstrip(), int(dataPort), self.loggedInUser[portNum])
                 # os.path.isfile(os.path.join(somedir, f))
+            self.dm.uploadList(fileList.rstrip(), int(dataPort), self.loggedInUser[portNum])
+            return 'ok'
         else:
             return self.sendLoginError()
 
