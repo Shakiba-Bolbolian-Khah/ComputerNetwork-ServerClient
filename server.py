@@ -3,6 +3,7 @@ import json
 import _thread
 import os
 import shutil
+import datetime
 # import pathlib
 
 CONFIG_ADD = "./config.json"
@@ -49,16 +50,31 @@ class User:
 
 class Logger:
     def __init__(self, fileName):
-        self.logFile = open(fileName,"a")
+        self.fileName = fileName
+    def log(self, msg):
+        # logFile = open(self.fileName,"a")
+        newLogging = str(datetime.datetime.now()) + " : " + msg + "\n"
+        print(newLogging)
+        # logFile.write(newLogging)
+        with open(self.fileName, "a") as f:
+            f.write(newLogging)
 
 
 
 class DownloadManager:
-    def __init__(self, dataPort):
+    def __init__(self, dataPort, adminFiles):
+        self.adminFiles = adminFiles
         self.dataPort = dataPort
         
-        # self.s = socket(AF_INET, SOCK_STREAM)
-        # self.s.bind(("", dataPort))
+    def uploadError(self, portNum):
+        print("portNum", portNum)
+        self.s = socket(AF_INET, SOCK_STREAM)
+        self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
+        self.s.bind(("", self.dataPort))
+        self.s.connect(('127.0.0.1', portNum))
+        errorData = "0\n"
+        self.s.sendall(errorData.encode())
+        self.s.close()
 
     def uploadList(self, data, portNum, user):
         if True:
@@ -71,27 +87,38 @@ class DownloadManager:
             self.s.close()
             return True
         else:
+            self.uploadError(portNum)
             return False
 
     def uploadFile(self, fileName, portNum, user):
         if True:
+            if fileName in self.adminFiles and user.role != ADMIN:
+                self.uploadError(portNum)
+                return "550 File unavailable."
             self.s = socket(AF_INET, SOCK_STREAM)
             self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
             self.s.bind(("", self.dataPort))
             self.s.connect(('127.0.0.1', portNum))
-            fileData = open(fileName, 'r').read()
-            self.s.sendall(fileData.encode())
+            fileData = open(fileName, 'rb').read()
+            fileData = (str(len(fileData)) + "\n").encode() + fileData
+            self.s.sendall(fileData)
             self.s.close()
-            return True
+            return "ok"
         else:
-            return False
+            self.uploadError(portNum)
+            return "425 Can't open data connection."
 
 
 class Server:
-    def __init__(self, users, dataPort):
+    def __init__(self, users, dataPort, adminFiles, logger):
         self.users = users
         self.loggedInUser = {}
-        self.dm = DownloadManager(dataPort)
+        self.dm = DownloadManager(dataPort, adminFiles)
+        self.logger = logger
+
+    def addLog(self, msg):
+        if self.logger:
+            self.logger.log(msg)
 
     def isUserNameValid( self, userName):
         print(userName)
@@ -109,6 +136,7 @@ class Server:
         if userName not in self.users or  self.users[userName].password != password :
             return "430 Invalid username or password."
         self.loggedInUser[portNum] = self.users[userName]
+        self.addLog(userName + " logged in!")
         return "230 User logged in, proceed."
 
     def sendLoginError(self):
@@ -128,6 +156,7 @@ class Server:
         if(self.isUserLoggedIn(portNum)):
             if not os.path.exists(fileName):
                 os.mknod(fileName)
+                self.addLog(self.loggedInUser[portNum].userName + " created file with name: " + fileName + "!")
                 return "257 "+fileName+" created."
             else:
                 return self.send500Error("File "+fileName+" already exists!")
@@ -141,6 +170,7 @@ class Server:
             except OSError:
                 return self.send500Error("Creation of the directory "+dirName+" failed!")
             else:
+                self.addLog(self.loggedInUser[portNum].userName + " created directory with name: " + dirName + "!")
                 return "257 "+dirName+" created." 
         else:
             return self.sendLoginError()
@@ -152,6 +182,7 @@ class Server:
             except OSError:
                 return self.send500Error("Deletion of the directory "+dirName+" failed!")
             else:
+                self.addLog(self.loggedInUser[portNum].userName + " deleted directory with name: " + dirName + "!")
                 return "250 "+dirName+" deleted." 
         else:
             return self.sendLoginError()
@@ -160,6 +191,7 @@ class Server:
         if(self.isUserLoggedIn(portNum)):
             if os.path.exists(fileName) and os.path.isfile(fileName):
                 os.remove(fileName)
+                self.addLog(self.loggedInUser[portNum].userName + " deleted file with name: " + fileName + "!")
                 return "250 "+fileName+" deleted."
             else:
                 return self.send500Error("File "+fileName+" does not exist!")
@@ -178,6 +210,7 @@ class Server:
             else:
                 return self.send500Error('List cound not uploas')
         else:
+            self.dm.uploadError(int(dataPort))
             return self.sendLoginError()
 
     def handleCWD(self, portNum, path):
@@ -194,13 +227,31 @@ class Server:
     def handleDL(self, portNum, dataPort, fileName):
         if(self.isUserLoggedIn(portNum)):
             if os.path.exists(fileName) and os.path.isfile(fileName):
-                uploadStatus = self.dm.uploadFile(fileName, int(dataPort), self.addLoggedInUser[portNum])
-                if uploadStatus:
-                    return '226 Sucessful Download.'
+                uploadStatus = self.dm.uploadFile(fileName, int(dataPort), self.loggedInUser[portNum])
+                if uploadStatus == "ok":
+                    self.addLog(self.loggedInUser[portNum].userName + " downloaded file with name: " + fileName + "!")
+                    return '226 Successful Download.'
                 else:
-                    return self.send500Error('File cound not uploas')
+                    return uploadStatus
             else:
+                self.dm.uploadError(int(dataPort))
                 return self.send500Error("File "+fileName+" does not exist!")
+        else:
+            self.dm.uploadError(int(dataPort))
+            return self.sendLoginError()
+
+    def handleHelp(self, portNum):
+        if(self.isUserLoggedIn(portNum)):
+            helpData = "421\n" + open("help.txt", 'r').read()
+            return(helpData)
+        else:
+            return self.sendLoginError()
+
+    def handleQuit(self, portNum):
+        if(self.isUserLoggedIn(portNum)):
+            self.addLog(self.loggedInUser[portNum].userName + " logged out!")
+            del self.loggedInUser[portNum]
+            return "221 Successful Quit."
         else:
             return self.sendLoginError()
 
@@ -208,11 +259,14 @@ class Server:
 
 
 
+
+
+
 class CommandParser:
 
-    def __init__(self, users, dataPort):
+    def __init__(self, users, dataPort, adminFiles, logger):
         self.requestedUsers = {}
-        self.server = Server(users, dataPort)
+        self.server = Server(users, dataPort, adminFiles, logger)
         self.initialDir = os.path.abspath(os.getcwd())
 
     def handleUsername(self, portNum, userName):
@@ -226,7 +280,9 @@ class CommandParser:
         if portNum not in self.requestedUsers:
             return "503 Bad sequence of commands."
         else:
-            return self.server.addLoggedInUser(portNum, self.requestedUsers[portNum], password)
+            username = self.requestedUsers[portNum]
+            del self.requestedUsers[portNum]
+            return self.server.addLoggedInUser(portNum, username, password)
 
 
     def parseCmd(self, client, portNum, cmd):
@@ -264,10 +320,13 @@ class CommandParser:
 
         elif splitedCmd[0] == "DL" and len(splitedCmd) == 3:
             client.send(self.server.handleDL(portNum, splitedCmd[2], splitedCmd[1]).encode())
+
         elif splitedCmd[0] == "HELP" and len(splitedCmd) == 1:
-            pass
+            client.send(self.server.handleHelp(portNum).encode())
+
         elif splitedCmd[0] == "QUIT" and len(splitedCmd) == 1:
-            pass
+            client.send(self.server.handleQuit(portNum).encode())
+
         else:
             client.send("501 Syntax error in parameters or arguments.".encode())
     
@@ -283,7 +342,7 @@ class API :
     def __init__(self):
         self.logger = None
         self.jsonParser()
-        self.cmdParser = CommandParser(self.users, self.dataPort)
+        self.cmdParser = CommandParser(self.users, self.dataPort, self.adminFiles, self.logger)
         self.s = socket(AF_INET, SOCK_STREAM)
         self.s.bind(("",self.cmdPort))
         self.s.listen(10)
