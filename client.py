@@ -9,7 +9,7 @@ class Client:
     def talk(self):
         self.dataS.bind(("", 0))
         self.dataS.listen(1)
-        self.s.connect(("", 8300))
+        self.s.connect(("", 8000))
         port = self.dataS.getsockname()[1]
         while(True):
             cmd = input()

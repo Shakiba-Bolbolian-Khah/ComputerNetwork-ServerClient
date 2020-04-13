@@ -1,5 +1,5 @@
 {
-  "commandChannelPort": 8300,
+  "commandChannelPort": 8000,
   "dataChannelPort":8001,
   "users": [
     {

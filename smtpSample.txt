@@ -1,0 +1,27 @@
+Trying 80.66.177.10...
+Connected to mail.ut.ac.ir.
+Escape character is '^]'.
+220 mail.ut.ac.ir ESMTP Postfix
+HELO me
+250 mail.ut.ac.ir
+MAIL FROM:<hsazarmsa@ut.ac.ir>    
+250 2.1.0 Ok
+AUTH LOGIN
+334 VXNlcm5hbWU6
+aHNhemFybXNhCg==
+334 UGFzc3dvcmQ6
+SGVuYTc4KzgxMDE5NjQwOA==
+235 2.7.0 Authentication successful
+DATA
+554 5.5.1 Error: no valid recipients
+RCPT TO:<hsazarmsa@ut.ac.ir>
+250 2.1.5 Ok
+DATA
+354 End data with <CR><LF>.<CR><LF>
+Subject: Test
+Testing SMTP with telnet
+.
+250 2.0.0 Ok: queued as 6DC781DAE2F
+QUIT
+221 2.0.0 Bye
+Connection closed by foreign host.

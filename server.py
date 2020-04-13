@@ -1,6 +1,6 @@
 from socket import *
 import json
-import thread
+import _thread
 import os
 import shutil
 # import pathlib
@@ -65,7 +65,7 @@ class DownloadManager:
             self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
             self.s.bind(("", self.dataPort))
             self.s.connect(('127.0.0.1',portNum))
-            sendBytes = self.s.send(data)
+            sendBytes = self.s.sendall(data.encode())
             self.s.close()
             # user.updateRemainedSize(len(data))
             return True
@@ -159,8 +159,11 @@ class Server:
             for f in files:
                 fileList += f + "\n"
                 # os.path.isfile(os.path.join(somedir, f))
-            self.dm.uploadList(fileList.rstrip(), int(dataPort), self.loggedInUser[portNum])
-            return 'ok'
+            uploadStatus = self.dm.uploadList(fileList.rstrip(), int(dataPort), self.loggedInUser[portNum])
+            if uploadStatus:
+                return '226 List transfer done.'
+            else:
+                return self.send500Error('List cound not uploas')
         else:
             return self.sendLoginError()
 
@@ -190,32 +193,32 @@ class CommandParser:
 
     def parseCmd(self, client, portNum, cmd):
         print(cmd)
-        splitedCmd = cmd.split()
+        splitedCmd = cmd.decode().split()
         print(splitedCmd)
 
         if splitedCmd[0] == "USER" and len(splitedCmd) == 2:
-            client.send(self.handleUsername(portNum, splitedCmd[1]))
+            client.send(self.handleUsername(portNum, splitedCmd[1]).encode())
 
         elif splitedCmd[0] == "PASS" and len(splitedCmd) == 2:
-            client.send(self.handlePassword(portNum, splitedCmd[1]))
+            client.send(self.handlePassword(portNum, splitedCmd[1]).encode())
 
         elif splitedCmd[0] == "PWD" and len(splitedCmd) == 1:
-            client.send(self.server.handlePWD(portNum))
+            client.send(self.server.handlePWD(portNum).encode())
 
         elif splitedCmd[0] == "MKD" and splitedCmd[1] == "-i" and len(splitedCmd) == 3:
-            client.send(self.server.handleMKFile(portNum, splitedCmd[2]))
+            client.send(self.server.handleMKFile(portNum, splitedCmd[2]).encode())
 
         elif splitedCmd[0] == "MKD" and len(splitedCmd) == 2:
             client.send(self.server.handleMKDir(portNum, splitedCmd[1]))
 
         elif splitedCmd[0] == "RMD" and splitedCmd[1] == "-f" and len(splitedCmd) == 3:
-            client.send(self.server.handleDeleteDir(portNum, splitedCmd[2]))
+            client.send(self.server.handleDeleteDir(portNum, splitedCmd[2]).encode())
 
         elif splitedCmd[0] == "RMD" and len(splitedCmd) == 2:
-            client.send(self.server.handleDeleteFile(portNum, splitedCmd[1]))
+            client.send(self.server.handleDeleteFile(portNum, splitedCmd[1]).encode())
 
         elif splitedCmd[0] == "LIST" and len(splitedCmd) == 2:
-            client.send(self.server.handleGetList(portNum, splitedCmd[1]))
+            client.send(self.server.handleGetList(portNum, splitedCmd[1]).encode())
 
         elif splitedCmd[0] == "CWD" and len(splitedCmd) == 2:
             pass
@@ -226,7 +229,7 @@ class CommandParser:
         elif splitedCmd[0] == "QUIT" and len(splitedCmd) == 1:
             pass
         else:
-            client.send("501 Syntax error in parameters or arguments.")
+            client.send("501 Syntax error in parameters or arguments.".encode())
     
 
     
@@ -262,7 +265,7 @@ class API :
     def listen(self):
         while(True):
             c,a = self.s.accept()
-            t = thread.start_new_thread(self.handleRequest,(c,a))
+            t = _thread.start_new_thread(self.handleRequest,(c,a))
 
 
     def jsonParser(self):
