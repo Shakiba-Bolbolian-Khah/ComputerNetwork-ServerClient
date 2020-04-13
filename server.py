@@ -56,6 +56,7 @@ class Logger:
 class DownloadManager:
     def __init__(self, dataPort):
         self.dataPort = dataPort
+        
         # self.s = socket(AF_INET, SOCK_STREAM)
         # self.s.bind(("", dataPort))
 
@@ -66,8 +67,21 @@ class DownloadManager:
             self.s.bind(("", self.dataPort))
             self.s.connect(('127.0.0.1',portNum))
             sendBytes = self.s.sendall(data.encode())
-            self.s.close()
             # user.updateRemainedSize(len(data))
+            self.s.close()
+            return True
+        else:
+            return False
+
+    def uploadFile(self, fileName, portNum, user):
+        if True:
+            self.s = socket(AF_INET, SOCK_STREAM)
+            self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
+            self.s.bind(("", self.dataPort))
+            self.s.connect(('127.0.0.1', portNum))
+            fileData = open(fileName, 'r').read()
+            self.s.sendall(fileData.encode())
+            self.s.close()
             return True
         else:
             return False
@@ -158,12 +172,35 @@ class Server:
             files = [f for f in os.listdir('.') if os.path.isfile(f)]
             for f in files:
                 fileList += f + "\n"
-                # os.path.isfile(os.path.join(somedir, f))
             uploadStatus = self.dm.uploadList(fileList.rstrip(), int(dataPort), self.loggedInUser[portNum])
             if uploadStatus:
                 return '226 List transfer done.'
             else:
                 return self.send500Error('List cound not uploas')
+        else:
+            return self.sendLoginError()
+
+    def handleCWD(self, portNum, path):
+        if(self.isUserLoggedIn(portNum)):
+            try:
+                os.chdir(path)
+                return '250 Successful Change.'
+            except OSError as e:
+                print(e)
+                return self.send500Error(str(e))
+        else:
+            return self.sendLoginError()
+
+    def handleDL(self, portNum, dataPort, fileName):
+        if(self.isUserLoggedIn(portNum)):
+            if os.path.exists(fileName) and os.path.isfile(fileName):
+                uploadStatus = self.dm.uploadFile(fileName, int(dataPort), self.addLoggedInUser[portNum])
+                if uploadStatus:
+                    return '226 Sucessful Download.'
+                else:
+                    return self.send500Error('File cound not uploas')
+            else:
+                return self.send500Error("File "+fileName+" does not exist!")
         else:
             return self.sendLoginError()
 
@@ -176,6 +213,7 @@ class CommandParser:
     def __init__(self, users, dataPort):
         self.requestedUsers = {}
         self.server = Server(users, dataPort)
+        self.initialDir = os.path.abspath(os.getcwd())
 
     def handleUsername(self, portNum, userName):
         if(self.server.isUserNameValid(userName)):
@@ -220,10 +258,12 @@ class CommandParser:
         elif splitedCmd[0] == "LIST" and len(splitedCmd) == 2:
             client.send(self.server.handleGetList(portNum, splitedCmd[1]).encode())
 
-        elif splitedCmd[0] == "CWD" and len(splitedCmd) == 2:
-            pass
-        elif splitedCmd[0] == "DL" and len(splitedCmd) == 2:
-            pass
+        elif splitedCmd[0] == "CWD" and 1 <= len(splitedCmd) <= 2:
+            path = splitedCmd[1] if len(splitedCmd) == 2 else self.initialDir
+            client.send(self.server.handleCWD(portNum, path).encode())
+
+        elif splitedCmd[0] == "DL" and len(splitedCmd) == 3:
+            client.send(self.server.handleDL(portNum, splitedCmd[2], splitedCmd[1]).encode())
         elif splitedCmd[0] == "HELP" and len(splitedCmd) == 1:
             pass
         elif splitedCmd[0] == "QUIT" and len(splitedCmd) == 1:
@@ -249,6 +289,7 @@ class API :
         self.s.listen(10)
         # self.s.setblocking(False)
         # self.s.settimeout(100.0)
+        print('listeninig...')
         self.listen()
 
     def handleRequest(self,  client, address):

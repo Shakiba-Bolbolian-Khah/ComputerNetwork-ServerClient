@@ -1,2 +1,2 @@
-USER {name}, It's argument is used to specify the user's username. It is used for user authenticaion.
-PASS {password}, It's argument is used to specify the user's password. It is used for authenticaion after using USER command.
+USER {name}, Its argument is used to specify the user's username. It is used for user authenticaion.
+PASS {password}, Its argument is used to specify the user's password. It is used for authenticaion after using USER command.

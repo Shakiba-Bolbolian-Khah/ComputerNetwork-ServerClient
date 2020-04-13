@@ -14,13 +14,22 @@ class Client:
         while(True):
             cmd = input()
             print(cmd.encode())
-            if(cmd == "LIST"):
+            if(cmd.split()[0] == "LIST" or cmd.split()[0] == "DL"):
                 cmd += " " + str(port)
             self.s.send(cmd.encode())
-            if(cmd == "LIST " + str(port)):
+            if(cmd.split()[0] == "LIST" or cmd.split()[0] == "DL"):
                 c,a = self.dataS.accept()
-                listData = c.recv(100000)
-                print(listData.decode())
+                total_data=[]
+                while True:
+                    data = c.recv(8192).decode()
+                    if not data: break
+                    total_data.append(data)
+                
+                if cmd.split()[0] == "DL":
+                    fileName = cmd.split()[1]
+                    open(fileName, 'w').write(''.join(total_data))
+                elif cmd.split()[0] == "LIST":
+                    print(''.join(total_data))
                 c.close()
             data = self.s.recv(100000)
             print(data.decode())    
