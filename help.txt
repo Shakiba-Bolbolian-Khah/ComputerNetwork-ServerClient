@@ -1,2 +1,30 @@
-USER {name}, Its argument is used to specify the user's username. It is used for user authenticaion.
-PASS {password}, Its argument is used to specify the user's password. It is used for authenticaion after using USER command.
+
+* USER [name],
+Its argument is used to specify the user's username. It is used for user authenticaion.
+
+* PASS [password],
+Its argument is used to specify the user's password. It is used for authenticaion after using USER command.
+
+* PWD ,
+It shows current working directory path.
+
+* MKD (-i) [file/dir name],
+Its first argument is used to specify that command is used for creating a file. If it is not used, command will create a new directory. Second argument is used to specify new directory/file name.
+
+* RMD (-f) [file/dir name],
+Its first argument is used to specify that command is used for deleteing a directory. If it is not used, command will delete a specific file. Second argument is used to specify directory/file name which should be deleted.
+
+* LIST ,
+It shows all available files in current working directory.
+
+* CWD [path],
+Its argument is used to specify the path. It is used for changing current working directory. If path is ".." current working directory changes to previous one and if path is not entered current working directory changes to initial one.
+
+* DL [name],
+Its argument is used to specify file name. It is used for downloading desired file from initial working directory.
+
+* HELP ,
+The command you are using currently! :)
+
+* QUIT ,
+It is used for logging out from current account.
