@@ -1,24 +1,27 @@
 from socket import *
+import sys
+
+COMMAND_PORT = int(sys.argv[1])
 
 class Client:
     def __init__(self):
-        self.s = socket(AF_INET, SOCK_STREAM)
-        self.dataS = socket(AF_INET, SOCK_STREAM)
-        self.talk()
+        self.comandSocket = socket(AF_INET, SOCK_STREAM)
+        self.dataSocket = socket(AF_INET, SOCK_STREAM)
         
     def talk(self):
-        self.dataS.bind(("", 0))
-        self.dataS.listen(1)
-        self.s.connect(("", 8200))
-        port = self.dataS.getsockname()[1]
+        self.dataSocket.bind(("", 0))
+        self.dataSocket.listen(1)
+        port = self.dataSocket.getsockname()[1]
+        self.comandSocket.connect(("", COMMAND_PORT))
         while(True):
             cmd = input()
-            print(cmd.encode())
             if(cmd.split()[0] == "LIST" or cmd.split()[0] == "DL"):
                 cmd += " " + str(port)
-            self.s.send(cmd.encode())
+
+            self.comandSocket.send(cmd.encode())
+
             if(cmd.split()[0] == "LIST" and len(cmd.split())==2) or (cmd.split()[0] == "DL" and len(cmd.split())==3):
-                c,a = self.dataS.accept()
+                c,a = self.dataSocket.accept()
                 total_data=bytearray()
                 while True:
                     data = c.recv(8192)
@@ -33,9 +36,12 @@ class Client:
                     elif cmd.split()[0] == "LIST":
                         print(total_data[1])
                 c.close()
-            data = self.s.recv(100000)
+            data = self.comandSocket.recv(100000)
             print(data.decode())    
-        self.s.close()
+        self.comandSocket.close()
 
 
-c = Client()
+if __name__ == "__main__":
+    c = Client()
+    c.talk()
+

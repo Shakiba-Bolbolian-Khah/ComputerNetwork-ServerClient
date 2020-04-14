@@ -36,18 +36,14 @@ class Accountant:
                     ('aHNhemFybXNhCg==\n', 334), ('SGVuYTc4KzgxMDE5NjQwOA==\n', 235),('RCPT TO:<' + email + '>\n', 250) ,
                     ('DATA\n', 354), ('Subject:traffic alarm\nyour traffic is lower than threshold\n.\n', 250), 
                     ('QUIT\n', 221)]
-        print('start sending email...')
         emailSocket = socket(AF_INET, SOCK_STREAM)
         emailSocket.connect(('mail.ut.ac.ir', 25))
         response = emailSocket.recv(500)
-        print(response)
         if not self.checkStatus(response, 220):
             return
         for command,expectedStatus in commands:
             emailSocket.send(command.encode())
-            print(command)
             response = emailSocket.recv(500)
-            print(response)
             if not self.checkStatus(response, expectedStatus):
                 return
         emailSocket.close()
@@ -103,12 +99,8 @@ class Logger:
         if fileName[:2] == './':
             fileName = fileName[2:]
         self.fileName = str(os.path.dirname(os.path.realpath(__file__))) + '/' + fileName
-        print(self.fileName)
     def log(self, msg):
-        # logFile = open(self.fileName,"a")
         newLogging = str(datetime.datetime.now()) + " : " + msg + "\n"
-        print(newLogging)
-        # logFile.write(newLogging)
         with open(self.fileName, "a") as f:
             f.write(newLogging)
 
@@ -120,7 +112,6 @@ class DownloadManager:
         self.dataPort = dataPort
         
     def uploadError(self, portNum):
-        print("portNum", portNum)
         self.s = socket(AF_INET, SOCK_STREAM)
         self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
         self.s.bind(("", self.dataPort))
@@ -139,8 +130,6 @@ class DownloadManager:
             self.s.connect(('127.0.0.1',portNum))
             sendBytes = self.s.sendall(data.encode())
             self.s.close()
-            print(sendBytes)
-            print(len(data.encode('utf-8')))
             user.updateRemainedSize(len(data.encode('utf-8')))
             return 'ok'
         else:
@@ -179,7 +168,6 @@ class Server:
             logger.log(msg)
 
     def isUserNameValid( self, userName):
-        print(userName)
         if userName in self.users:
             return True
         return False
@@ -190,7 +178,6 @@ class Server:
         return False
 
     def addLoggedInUser( self, portNum, userName, password):
-        # print(self.users)
         if userName not in self.users or  self.users[userName].password != password :
             return "430 Invalid username or password."
         self.loggedInUser[portNum] = self.users[userName]
@@ -277,7 +264,6 @@ class Server:
                 os.chdir(path)
                 return '250 Successful Change.'
             except OSError as e:
-                print(e)
                 return self.send500Error(str(e))
         else:
             return self.sendLoginError()
@@ -325,7 +311,7 @@ class CommandParser:
     def __init__(self, users, dataPort, adminFiles):
         self.requestedUsers = {}
         self.server = Server(users, dataPort, adminFiles)
-        self.initialDir = os.path.abspath(os.getcwd())
+        self.initialDir = os.path.dirname(os.path.realpath(__file__))
 
     def handleUsername(self, portNum, userName):
         if(self.server.isUserNameValid(userName)):
@@ -344,9 +330,7 @@ class CommandParser:
 
 
     def parseCmd(self, client, portNum, cmd):
-        print(cmd)
         splitedCmd = cmd.decode().split()
-        print(splitedCmd)
 
         if splitedCmd[0] == "USER" and len(splitedCmd) == 2:
             client.send(self.handleUsername(portNum, splitedCmd[1]).encode())
@@ -404,21 +388,17 @@ class API :
         self.s = socket(AF_INET, SOCK_STREAM)
         self.s.bind(("",self.cmdPort))
         self.s.listen(10)
-        # self.s.setblocking(False)
-        # self.s.settimeout(100.0)
         print('listeninig...')
         self.listen()
 
     def handleRequest(self,  client, address):
-        # client.send(cmd +" "+str(address[1]))
-        # self.cmdParser.parseCmd(client, address[1], cmd)
-        # try:
-        while(True):
-            cmd = client.recv(MAX_LENGTH)
-            self.cmdParser.parseCmd(client, address[1], cmd)
-        # except:
-        #     client.close()
-        #     print("done")
+        try:
+            while(True):
+                cmd = client.recv(MAX_LENGTH)
+                self.cmdParser.parseCmd(client, address[1], cmd)
+        except Exception as e:
+            client.close()
+            print(e)
 
     def listen(self):
         while(True):
