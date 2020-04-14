@@ -1,5 +1,5 @@
 {
-  "commandChannelPort": 8100,
+  "commandChannelPort": 8200,
   "dataChannelPort":8001,
   "users": [
     {
@@ -17,24 +17,18 @@
     "users": [
       {
         "user": "navid",
-        "size": "12000",
+        "size": "10000",
         "email": "navid@akbari.com",
         "alert": true
-      },
-      {
-        "user": "farzad",
-        "size": "150000000",
-        "email": "farzad@ahabibi.com",
-        "alert": false
       }
     ]
   },
   "logging": {
-    "enable": true,
+    "enable": false,
     "path": "./logs.log"
   },
   "authorization": {
-    "enable": true,
+    "enable": false,
     "admins": [
       "farzad"
     ],

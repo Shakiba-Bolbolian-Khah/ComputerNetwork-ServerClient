@@ -4,23 +4,66 @@ import _thread
 import os
 import shutil
 import datetime
-# import pathlib
 
 CONFIG_ADD = "./config.json"
 NORMAL = "normal"
 ADMIN = "admin"
 MAX_LENGTH = 2048
 
+logger = None
+
 class Accountant:
     def __init__(self, size, alert, threshold):
         self.size = size
         self.alert = alert
         self.threshold = threshold
+        self.hasEmailSent = False
 
-    def updateRemainedSize(self, decreasedSize):
-        # ToDo: size must check and if it gets lower than threshold send email
+    def checkStatus(self, response, expectedStatus):
+        status = int(response.decode().split()[0])
+        if status != expectedStatus:
+            return False
+        else:
+            return True
+
+    def addLog(self, msg):
+        global logger
+        if logger:
+            logger.log(msg)
+
+    def sendEmail(self, email):
+        commands = [('HELO 127.0.0.1\n', 250), ('MAIL FROM:<hsazarmsa@ut.ac.ir>\n', 250), ('AUTH LOGIN\n', 334),
+                    ('aHNhemFybXNhCg==\n', 334), ('SGVuYTc4KzgxMDE5NjQwOA==\n', 235),('RCPT TO:<' + email + '>\n', 250) ,
+                    ('DATA\n', 354), ('Subject:traffic alarm\nyour traffic is lower than threshold\n.\n', 250), 
+                    ('QUIT\n', 221)]
+        print('start sending email...')
+        emailSocket = socket(AF_INET, SOCK_STREAM)
+        emailSocket.connect(('mail.ut.ac.ir', 25))
+        response = emailSocket.recv(500)
+        print(response)
+        if not self.checkStatus(response, 220):
+            return
+        for command,expectedStatus in commands:
+            emailSocket.send(command.encode())
+            print(command)
+            response = emailSocket.recv(500)
+            print(response)
+            if not self.checkStatus(response, expectedStatus):
+                return
+        emailSocket.close()
+        self.addLog('Email to ' + email + ' has sent.')
+        self.hasEmailSent = True
+
+    def updateRemainedSize(self, decreasedSize, email):
         self.size -= decreasedSize
+        if self.size < self.threshold and not self.hasEmailSent:
+            self.sendEmail(email)
 
+
+    def hasEnoughTraffic(self, size):
+        if self.size < size:
+            return False
+        return True
 
 class User:
     def __init__(self, userName, password):
@@ -40,7 +83,14 @@ class User:
         self.role = role
 
     def updateRemainedSize(self, decreasedSize):
-        self.accountant.updateRemainedSize(decreasedSize)
+        if self.accountant:
+            self.accountant.updateRemainedSize(decreasedSize, self.email)
+
+    def hasEnoughTraffic(self, size):
+        if self.accountant:
+            return self.accountant.hasEnoughTraffic(size)
+        else:
+            return True
 
     def __str__(self):
         print (self.userName, self.password, self.role, self.email, self.accountant.size, self.accountant.alert, self.accountant.threshold)
@@ -50,7 +100,10 @@ class User:
 
 class Logger:
     def __init__(self, fileName):
-        self.fileName = fileName
+        if fileName[:2] == './':
+            fileName = fileName[2:]
+        self.fileName = str(os.path.dirname(os.path.realpath(__file__))) + '/' + fileName
+        print(self.fileName)
     def log(self, msg):
         # logFile = open(self.fileName,"a")
         newLogging = str(datetime.datetime.now()) + " : " + msg + "\n"
@@ -77,21 +130,27 @@ class DownloadManager:
         self.s.close()
 
     def uploadList(self, data, portNum, user):
-        if True:
+        if not data:
+            data = '\n'
+        if user.hasEnoughTraffic(len(data.encode('utf-8'))):
             self.s = socket(AF_INET, SOCK_STREAM)
             self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
             self.s.bind(("", self.dataPort))
             self.s.connect(('127.0.0.1',portNum))
             sendBytes = self.s.sendall(data.encode())
-            # user.updateRemainedSize(len(data))
             self.s.close()
-            return True
+            print(sendBytes)
+            print(len(data.encode('utf-8')))
+            user.updateRemainedSize(len(data.encode('utf-8')))
+            return 'ok'
         else:
             self.uploadError(portNum)
-            return False
+            return "425 Can't open data connection."
 
     def uploadFile(self, fileName, portNum, user):
-        if True:
+        fileData = open(fileName, 'rb').read()
+        fileData = (str(len(fileData)) + "\n").encode() + fileData
+        if user.hasEnoughTraffic(len(fileData)):
             if fileName in self.adminFiles and user.role != ADMIN:
                 self.uploadError(portNum)
                 return "550 File unavailable."
@@ -99,10 +158,9 @@ class DownloadManager:
             self.s.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1)
             self.s.bind(("", self.dataPort))
             self.s.connect(('127.0.0.1', portNum))
-            fileData = open(fileName, 'rb').read()
-            fileData = (str(len(fileData)) + "\n").encode() + fileData
             self.s.sendall(fileData)
             self.s.close()
+            user.updateRemainedSize(len(fileData))
             return "ok"
         else:
             self.uploadError(portNum)
@@ -110,15 +168,15 @@ class DownloadManager:
 
 
 class Server:
-    def __init__(self, users, dataPort, adminFiles, logger):
+    def __init__(self, users, dataPort, adminFiles):
         self.users = users
         self.loggedInUser = {}
         self.dm = DownloadManager(dataPort, adminFiles)
-        self.logger = logger
 
     def addLog(self, msg):
-        if self.logger:
-            self.logger.log(msg)
+        global logger
+        if logger:
+            logger.log(msg)
 
     def isUserNameValid( self, userName):
         print(userName)
@@ -205,10 +263,10 @@ class Server:
             for f in files:
                 fileList += f + "\n"
             uploadStatus = self.dm.uploadList(fileList.rstrip(), int(dataPort), self.loggedInUser[portNum])
-            if uploadStatus:
+            if uploadStatus == 'ok':
                 return '226 List transfer done.'
             else:
-                return self.send500Error('List cound not uploas')
+                return uploadStatus
         else:
             self.dm.uploadError(int(dataPort))
             return self.sendLoginError()
@@ -264,9 +322,9 @@ class Server:
 
 class CommandParser:
 
-    def __init__(self, users, dataPort, adminFiles, logger):
+    def __init__(self, users, dataPort, adminFiles):
         self.requestedUsers = {}
-        self.server = Server(users, dataPort, adminFiles, logger)
+        self.server = Server(users, dataPort, adminFiles)
         self.initialDir = os.path.abspath(os.getcwd())
 
     def handleUsername(self, portNum, userName):
@@ -303,7 +361,7 @@ class CommandParser:
             client.send(self.server.handleMKFile(portNum, splitedCmd[2]).encode())
 
         elif splitedCmd[0] == "MKD" and len(splitedCmd) == 2:
-            client.send(self.server.handleMKDir(portNum, splitedCmd[1]))
+            client.send(self.server.handleMKDir(portNum, splitedCmd[1]).encode())
 
         elif splitedCmd[0] == "RMD" and splitedCmd[1] == "-f" and len(splitedCmd) == 3:
             client.send(self.server.handleDeleteDir(portNum, splitedCmd[2]).encode())
@@ -340,9 +398,9 @@ class CommandParser:
 class API :
 
     def __init__(self):
-        self.logger = None
+        self.adminFiles = []
         self.jsonParser()
-        self.cmdParser = CommandParser(self.users, self.dataPort, self.adminFiles, self.logger)
+        self.cmdParser = CommandParser(self.users, self.dataPort, self.adminFiles)
         self.s = socket(AF_INET, SOCK_STREAM)
         self.s.bind(("",self.cmdPort))
         self.s.listen(10)
@@ -385,7 +443,8 @@ class API :
                 self.users[user["user"]].setEmail(email)
 
         if(configs["logging"]["enable"]):
-            self.logger = Logger(configs["logging"]["path"])
+            global logger 
+            logger = Logger(configs["logging"]["path"])
 
         if(configs["authorization"]["enable"]):
             for admin in configs["authorization"]["admins"]:
